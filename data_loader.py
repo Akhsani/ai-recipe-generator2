@@ -198,12 +198,15 @@ def _parse_pack_unit(pack_unit: str | None) -> tuple[float, str] | None:
     """
     Parse Pack Unit string to (qty_per_pack, base_unit).
     E.g. '750 GR' -> (750, 'GR'), '6X500 ML' -> (3000, 'ML'), '12X180 GR' -> (2160, 'GR').
+
+    For "N X 1 L" (e.g. 6 X 1 L): transaction UOM PAC is typically per bottle (1L), not per case.
+    Use per-unit volume (1000 ml) for cost so recipe amounts in ml are priced correctly.
     """
     if not pack_unit or not (s := pack_unit.strip()):
         return None
     # Match: optional NX prefix (e.g. 6X, 12X), number (allow comma as decimal), unit (GR, ML, KG, etc.)
     s_clean = s.replace(",", ".")
-    m = re.match(r"^(?:(\d+(?:\.\d+)?)\s*[xX]\s*)?(\d+(?:\.\d+)?)\s*(GR|ML|KG|G|L|BT|PC|PAC|CAR|CTN)?", s_clean, re.I)
+    m = re.match(r"^(?:(\d+(?:\.\d+)?)\s*[xX]\s*)?(\d+(?:\.\d+)?)\s*(GR|ML|KG|G|L|LT|BT|PC|PAC|CAR|CTN)?", s_clean, re.I)
     if not m:
         return None
     mult_str, qty_str, unit = m.group(1), m.group(2), (m.group(3) or "PAC").upper()
@@ -215,10 +218,13 @@ def _parse_pack_unit(pack_unit: str | None) -> tuple[float, str] | None:
         base = "GR"
         if unit == "KG":
             total *= 1000
-    elif unit in ("ML", "L"):
+    elif unit in ("ML", "L", "LT"):
         base = "ML"
-        if unit == "L":
+        if unit in ("L", "LT"):
             total *= 1000
+        # "N X 1 L" / "N X 1 LT": transaction PAC = 1 bottle (1L), not 1 case
+        if mult > 1 and qty == 1:
+            total = 1000.0  # per-bottle volume
     else:
         base = unit
     return (total, base)
