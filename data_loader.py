@@ -199,12 +199,15 @@ def _parse_pack_unit(pack_unit: str | None) -> tuple[float, str] | None:
     Parse Pack Unit string to (qty_per_pack, base_unit).
     E.g. '750 GR' -> (750, 'GR'), '6X500 ML' -> (3000, 'ML'), '12X180 GR' -> (2160, 'GR').
 
-    For "N X 1 L" (e.g. 6 X 1 L): transaction UOM PAC is typically per bottle (1L), not per case.
-    Use per-unit volume (1000 ml) for cost so recipe amounts in ml are priced correctly.
+    For "N X M L/LT" (e.g. 6 X 1 L, 6 X 2 LT): transaction UOM PAC is typically per bottle,
+    not per case. Use per-bottle volume (M*1000 ml) for cost.
+
+    Handles: comma decimal ("4X2,8 KG"), surrounding quotes.
+    Unhandled (fallback to Net Weight/Volume): ranges ("7-8 KG/LOAF"), nested ("6(100X2,5)").
     """
-    if not pack_unit or not (s := pack_unit.strip()):
+    if not pack_unit or not (s := pack_unit.strip().strip('"\'"')):
         return None
-    # Match: optional NX prefix (e.g. 6X, 12X), number (allow comma as decimal), unit (GR, ML, KG, etc.)
+    # Normalize comma decimal, then match
     s_clean = s.replace(",", ".")
     m = re.match(r"^(?:(\d+(?:\.\d+)?)\s*[xX]\s*)?(\d+(?:\.\d+)?)\s*(GR|ML|KG|G|L|LT|BT|PC|PAC|CAR|CTN)?", s_clean, re.I)
     if not m:
@@ -222,9 +225,9 @@ def _parse_pack_unit(pack_unit: str | None) -> tuple[float, str] | None:
         base = "ML"
         if unit in ("L", "LT"):
             total *= 1000
-        # "N X 1 L" / "N X 1 LT": transaction PAC = 1 bottle (1L), not 1 case
-        if mult > 1 and qty == 1:
-            total = 1000.0  # per-bottle volume
+            # "N X M L/LT": transaction PAC = 1 bottle (M L), not 1 case
+            if mult > 1:
+                total = qty * 1000.0  # per-bottle volume in ml
     else:
         base = unit
     return (total, base)
@@ -247,10 +250,15 @@ def build_product_unit_info(products: list[dict] | None = None) -> dict[str, dic
             qty, base = parsed
             result[code] = {"qty_per_pack": qty, "base_unit": base, "pack_unit": pack_unit}
         else:
-            # Fallback: use Net Weight if available (respect Weight Unit: KG -> 1000 GR)
+            # Fallback: BT/JAR (bottles/jars) use Volume when available; else Net Weight
+            vol = _parse_num(p.get("Volume"))
+            vol_unit = (p.get("Volume Unit") or "").strip().upper()
             nw = _parse_num(p.get("Net Weight"))
             wu = (p.get("Weight Unit") or "").strip().upper()
-            if nw > 0:
+            pu_upper = pack_unit.upper()
+            if vol > 0 and vol_unit in ("CCM", "ML") and pu_upper in ("BT", "JAR"):
+                result[code] = {"qty_per_pack": vol, "base_unit": "ML", "pack_unit": pack_unit or "1"}
+            elif nw > 0:
                 if wu == "KG":
                     nw *= 1000
                 result[code] = {"qty_per_pack": nw, "base_unit": "GR", "pack_unit": pack_unit or "1"}
