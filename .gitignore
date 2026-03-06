@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+
+# Large data files (exceed GitHub 100MB limit)
+sample-trx-jan26-feb26.csv
