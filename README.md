@@ -44,8 +44,19 @@ streamlit run app.py
 ## Sample Data
 
 - **sample_products.csv**: Product catalog (SKU, title, category, etc.)
-- **sample-trx-jan26-feb26.csv**: Transaction history (Jan–Feb 2026)
-- **active-shipto-dec25-feb26.csv**: Active shipto list (if available)
+- **sample-trx-sample.csv**: Transaction sample (~6K rows, in repo) — EIJI PATISSERIE + top shiptos for demo
+- **sample-trx-jan26-feb26.csv**: Full transaction history (Jan–Feb 2026) — not in repo (exceeds GitHub 100MB limit)
+
+The app uses **sample-trx-sample.csv** by default. For full data (production or richer demo):
+
+1. Place `sample-trx-jan26-feb26.csv` in the project root, or
+2. Set `TRX_CSV_PATH` in `.env` to the full file path.
+
+To regenerate the sample from the full file:
+
+```bash
+python scripts/generate_trx_sample.py
+```
 
 The prototype uses a pre-selected sample shipto (**EIJI PATISSERIE**, Bakery Local) with rich transaction history and diverse products for demonstration.
 

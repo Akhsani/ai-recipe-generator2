@@ -4,11 +4,16 @@ Load sample data and build shipto profile + shopping history for recipe generati
 from __future__ import annotations
 
 import csv
+import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent
+
+# Transaction file: prefer env, then full file, then sample (for demo)
+TRX_FULL = DATA_DIR / "sample-trx-jan26-feb26.csv"
+TRX_SAMPLE = DATA_DIR / "sample-trx-sample.csv"
 
 
 def _norm(v: str | None) -> str:
@@ -33,8 +38,14 @@ def load_products(csv_path: Path | None = None) -> list[dict]:
 
 
 def load_transactions(csv_path: Path | None = None) -> list[dict]:
-    """Load transaction data."""
-    path = csv_path or DATA_DIR / "sample-trx-jan26-feb26.csv"
+    """Load transaction data. Prefers full file; falls back to sample for demo."""
+    if csv_path is not None:
+        path = Path(csv_path)
+    else:
+        env_path = os.getenv("TRX_CSV_PATH")
+        path = Path(env_path) if env_path else None
+        if path is None or not path.exists():
+            path = TRX_FULL if TRX_FULL.exists() else TRX_SAMPLE
     with path.open(newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
